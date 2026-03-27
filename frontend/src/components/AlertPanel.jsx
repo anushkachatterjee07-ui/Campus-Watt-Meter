@@ -28,13 +28,13 @@ function AlertPanel({ alerts }) {
           </div>
         ) : (
           alerts.map((alert) => (
-            <div key={alert.room_id} className="alert-item" id={`alert-${alert.room_id}`}>
+            <div key={alert.id} className="alert-item" id={`alert-${alert.room_id}`}>
               <div className="alert-pulse"></div>
               <div className="alert-info">
                 <span className="alert-room">{alert.room_id}</span>
-                <span className="alert-message">Lights ON in empty room</span>
+                <span className="alert-message">{alert.message}</span>
               </div>
-              <span className="alert-time">{getTimeAgo(alert.last_updated)}</span>
+              <span className="alert-time">{getTimeAgo(alert.timestamp)}</span>
             </div>
           ))
         )}

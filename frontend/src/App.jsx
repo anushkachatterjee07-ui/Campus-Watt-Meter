@@ -89,6 +89,19 @@ function App() {
     }
   };
 
+  const calibrateIntensity = async () => {
+    try {
+      const res = await fetch(`${API_URL}/cv/calibrate`, { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'calibration_started') {
+        alert('Calibration Triggered! Light baseline captured.');
+      }
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to calibrate:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 5000);
@@ -135,6 +148,9 @@ function App() {
                 <p>Start the camera or load demo data to begin monitoring.</p>
                 <button className="seed-btn primary" onClick={startCV}>
                   Start Camera
+                </button>
+                <button className="seed-btn calibrate-btn" onClick={calibrateIntensity} style={{marginLeft: '10px'}}>
+                  🛡️ Calibrate Intensity
                 </button>
                 <button className="seed-btn" onClick={seedData} style={{marginLeft: '10px'}}>
                   Load Demo Data

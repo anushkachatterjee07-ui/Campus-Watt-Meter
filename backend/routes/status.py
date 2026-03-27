@@ -4,6 +4,8 @@ from datetime import datetime
 from models.room import RoomUpdate
 import state
 from cv_service import cv_service
+from logic_engine import logic_engine
+from database import log_room_event, log_alert, get_room_history, get_recent_alerts
 
 router = APIRouter()
 
@@ -12,25 +14,42 @@ router = APIRouter()
 async def update_status(data: RoomUpdate):
     """Receive occupancy data from the CV module."""
     timestamp = data.timestamp or datetime.now().isoformat()
-    wastage = data.occupancy == "empty" and data.light_status == "on"
-
+    
+    # 1. Structure the current data state
     room_data = {
         "room_id": data.room_id,
         "occupancy": data.occupancy,
         "last_updated": timestamp,
         "light_status": data.light_status,
-        "wastage": wastage,
         "person_count": data.person_count,
         "confidence": round(data.confidence, 2),
+        "appliance_power_watts": data.appliance_power_watts,
     }
+
+    # 2. Evaluate system state against predefined rules (Logic Engine)
+    is_wastage, alerts = logic_engine.evaluate_state(room_data)
+    room_data["wastage"] = is_wastage
+    room_data["triggered_alerts"] = [a[0] for a in alerts] # Names for internal state
     state.rooms[data.room_id] = room_data
 
-    # Track history
+    # Log to SQLite
+    await log_room_event(
+        data.room_id, 
+        data.person_count, 
+        data.light_status, 
+        data.appliance_power_watts
+    )
+    
+    # Log specific alerts to the 'alerts' table
+    for alert_type, message in alerts:
+        await log_alert(data.room_id, alert_type, message)
+
+    # Track in-memory history
     state.history.append({**room_data})
     if len(state.history) > state.MAX_HISTORY:
         state.history = state.history[-state.MAX_HISTORY:]
 
-    return {"status": "ok", "wastage": wastage}
+    return {"status": "ok", "wastage": is_wastage}
 
 
 @router.get("/status")
@@ -41,8 +60,14 @@ async def get_status():
 
 @router.get("/alerts")
 async def get_alerts():
-    """Return rooms currently flagged for energy wastage."""
-    return [r for r in state.rooms.values() if r["wastage"]]
+    """Return recent historical alerts from the database."""
+    return await get_recent_alerts(limit=15)
+
+
+@router.get("/history/{room_id}")
+async def get_history(room_id: str):
+    """Return historical trend data for a specific room."""
+    return await get_room_history(room_id)
 
 
 @router.get("/stats")
@@ -73,7 +98,16 @@ async def toggle_light(room_id: str):
 
     room = state.rooms[room_id]
     room["light_status"] = "off" if room["light_status"] == "on" else "on"
-    room["wastage"] = room["occupancy"] == "empty" and room["light_status"] == "on"
+    
+    # Re-evaluate logic rules
+    is_wastage, alerts = logic_engine.evaluate_state(room)
+    room["wastage"] = is_wastage
+    room["triggered_alerts"] = [a[0] for a in alerts]
+    
+    # Log alert if triggered by manual toggle
+    for alert_type, message in alerts:
+        await log_alert(room_id, alert_type, message)
+    
     room["last_updated"] = datetime.now().isoformat()
     return room
 
@@ -102,16 +136,26 @@ async def seed_data():
 
     for room in demo_rooms:
         timestamp = datetime.now().isoformat()
-        wastage = room["occupancy"] == "empty" and room["light_status"] == "on"
-        state.rooms[room["room_id"]] = {
+        room_data_dict = {
             "room_id": room["room_id"],
             "occupancy": room["occupancy"],
             "last_updated": timestamp,
             "light_status": room["light_status"],
-            "wastage": wastage,
             "person_count": room["person_count"],
             "confidence": room["confidence"],
+            "appliance_power_watts": 0.0,
         }
+        
+        # Evaluate Logic Engine rules
+        is_wastage, alerts = logic_engine.evaluate_state(room_data_dict)
+        room_data_dict["wastage"] = is_wastage
+        room_data_dict["triggered_alerts"] = [a[0] for a in alerts]
+        
+        # Log to DB for seeded wastage
+        for alert_type, message in alerts:
+            await log_alert(room["room_id"], alert_type, message)
+        
+        state.rooms[room["room_id"]] = room_data_dict
 
     return {"status": "seeded", "rooms_created": len(demo_rooms)}
 
@@ -120,7 +164,7 @@ async def seed_data():
 
 
 @router.post("/cv/start")
-async def start_cv(camera_index: int = 0, room_id: str = "A101"):
+async def start_cv(camera_index: int = 1, room_id: str = "A101"):
     """Start the integrated CV detection service."""
     result = cv_service.start(camera_index=camera_index, room_id=room_id)
     return result
@@ -130,6 +174,13 @@ async def start_cv(camera_index: int = 0, room_id: str = "A101"):
 async def stop_cv():
     """Stop the integrated CV detection service."""
     result = cv_service.stop()
+    return result
+
+
+@router.post("/cv/calibrate")
+async def calibrate_cv():
+    """Trigger a brightness baseline calibration."""
+    result = cv_service.calibrate()
     return result
 
 

@@ -193,6 +193,20 @@
 }
 .seed-btn.primary:hover { background: rgba(16, 185, 129, 0.25); }
 
+.seed-btn.calibrate-btn {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.seed-btn.calibrate-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  transform: translateY(-1px);
+}
+
 /* ── Loading & Empty States ─────────────────────────── */
 .loading-state, .empty-state {
   display: flex;

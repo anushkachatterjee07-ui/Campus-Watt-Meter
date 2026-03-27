@@ -1,7 +1,7 @@
-# ── Backend ──
 fastapi==0.115.0
 uvicorn==0.30.0
 pydantic==2.9.0
+aiosqlite==0.20.0
 
 # ── Computer Vision ──
 opencv-python==4.10.0.84

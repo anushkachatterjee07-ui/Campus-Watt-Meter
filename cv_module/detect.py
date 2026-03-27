@@ -10,6 +10,8 @@ import time
 from datetime import datetime
 from collections import deque
 
+from appliance_status import create_appliance_monitor
+
 try:
     from ultralytics import YOLO
 except ImportError:
@@ -25,7 +27,7 @@ OCCUPIED_THRESHOLD = 3        # 3 out of 5 frames → occupied
 SEND_INTERVAL = 2             # seconds between backend updates
 FRAME_SKIP = 2                # process every Nth frame
 TARGET_SIZE = (640, 480)
-CAMERA_INDEX = 0
+CAMERA_INDEX = 1
 
 
 def main():
@@ -44,6 +46,10 @@ def main():
     detection_buffer = deque(maxlen=BUFFER_SIZE)
     frame_count = 0
     last_send_time = 0
+
+    # Initialize Appliance Status Recognition Module
+    appliance_monitor = create_appliance_monitor("simulated")
+    print(f"[INFO] Appliance monitor initialized: {appliance_monitor.__class__.__name__}")
 
     print(f"[INFO] Detection started for room {ROOM_ID}")
     print("[INFO] Press 'q' to quit\n")
@@ -114,8 +120,12 @@ def main():
                 "occupancy": current_state,
                 "person_count": person_count,
                 "confidence": round(max_confidence, 2),
-                "light_status": "on",  # Default; extend with light detection
             }
+            
+            # Fetch appliance status once per tick
+            appl_status = appliance_monitor.get_status()
+            data["light_status"] = "on" if appl_status["is_on"] else "off"
+            data["appliance_power_watts"] = appl_status.get("power_watts", 0.0)
 
             try:
                 response = requests.post(BACKEND_URL, json=data, timeout=2)

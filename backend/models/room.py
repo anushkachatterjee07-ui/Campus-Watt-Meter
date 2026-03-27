@@ -10,6 +10,7 @@ class RoomUpdate(BaseModel):
     person_count: int = 0
     confidence: float = 0.0
     light_status: str = "on"  # "on" or "off"
+    appliance_power_watts: float = 0.0
 
 
 class RoomStatus(BaseModel):
@@ -21,3 +22,4 @@ class RoomStatus(BaseModel):
     wastage: bool
     person_count: int
     confidence: float
+    appliance_power_watts: float = 0.0
